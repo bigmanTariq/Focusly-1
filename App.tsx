@@ -1,13 +1,12 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { LearningNode, TimerState, UserStats, NodeType } from './types';
-import { WORK_TIME, SHORT_BREAK } from './constants';
+import React, { useState, useEffect } from 'react';
+import { LearningNode, TimerState, UserStats, NodeType, DeepContent } from './types';
+import { WORK_TIME } from './constants';
 import { generateRoadmap, generateNodeContent } from './geminiService';
 import RoadmapView from './components/RoadmapView';
 import Analytics from './components/Analytics';
-import Timer from './components/Timer';
 import FocusMode from './components/FocusMode';
-import { Layout, BarChart2, Moon, Sun, User, Network } from 'lucide-react';
+import { Layout, BarChart2, Moon, Sun, User, Network, Plus, Zap, Ban } from 'lucide-react';
 
 const App: React.FC = () => {
   const [nodes, setNodes] = useState<LearningNode[]>(() => {
@@ -40,6 +39,8 @@ const App: React.FC = () => {
   });
 
   const [topic, setTopic] = useState<string>(() => localStorage.getItem('focusly_topic') || '');
+  const [hideNoise, setHideNoise] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDarkMode);
@@ -80,16 +81,49 @@ const App: React.FC = () => {
     setNodes(newNodes);
   };
 
+  const handleAddTask = (e: React.FormEvent, type: NodeType) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+    
+    const newNode: LearningNode = {
+      id: crypto.randomUUID(),
+      parentId: null,
+      title: newTaskTitle,
+      description: "Manual task entry",
+      type: type,
+      difficultyLevel: type === 'signal' ? 50 : 0,
+      learningOutcome: "Completion of manual task",
+      searchQueries: [],
+      resources: [],
+      status: 'available',
+      depth: 0,
+      pomodorosSpent: 0,
+      childrenIds: [],
+      createdAt: Date.now(),
+    };
+    setNodes(prev => [newNode, ...prev]);
+    setNewTaskTitle('');
+  };
+
   const handleFetchNodeContent = async (nodeId: string) => {
     const node = nodes.find(n => n.id === nodeId);
-    if (!node || node.content) return;
+    if (!node || node.deepContent) return;
 
-    const result = await generateNodeContent(node.title, topic);
-    setNodes(prev => prev.map(n => n.id === nodeId ? { 
-      ...n, 
-      content: result.content, 
-      eli7Content: result.eli7Content 
-    } : n));
+    const result: DeepContent = await generateNodeContent(node.title, topic || "Productivity");
+    if (result) {
+      setNodes(prev => prev.map(n => n.id === nodeId ? { 
+        ...n, 
+        deepContent: result
+      } : n));
+    }
+  };
+
+  const toggleNodeType = (id: string) => {
+    setNodes(prev => prev.map(n => n.id === id ? { ...n, type: n.type === 'signal' ? 'noise' : 'signal' } : n));
+  };
+
+  const handleDeleteNode = (id: string) => {
+    setNodes(prev => prev.filter(n => n.id !== id));
   };
 
   const handleDrillDown = async (parentId: string) => {
@@ -157,18 +191,28 @@ const App: React.FC = () => {
       <header className="fixed top-0 left-0 md:left-24 right-0 h-16 bg-white/70 dark:bg-black/70 apple-blur z-40 px-8 flex items-center justify-between border-b border-gray-100 dark:border-white/10">
         <div className="flex items-center gap-3">
            <Network className="text-indigo-500" size={24} />
-           <span className="font-bold tracking-tight dark:text-white uppercase text-xs">Path Architect <span className="text-indigo-500">T-Shape</span></span>
+           <span className="font-bold tracking-tight dark:text-white uppercase text-xs">Focusly <span className="text-indigo-500">Signal Architect</span></span>
         </div>
+        
+        {topic && (
+          <div className="hidden lg:flex items-center gap-4 bg-gray-100 dark:bg-white/5 px-4 py-1.5 rounded-full border border-gray-200 dark:border-white/10">
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Mission</span>
+            <span className="text-xs font-bold dark:text-white truncate max-w-[200px]">{topic}</span>
+          </div>
+        )}
+
         <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setHideNoise(!hideNoise)} 
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${hideNoise ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-gray-100 dark:bg-white/5 text-gray-500'}`}
+          >
+            <Ban size={14} /> {hideNoise ? 'Noise Hidden' : 'Showing All'}
+          </button>
           <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 dark:text-gray-400 transition-colors">
             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
           <div className="h-8 w-[1px] bg-gray-100 dark:bg-white/10 mx-1"></div>
           <button className="flex items-center gap-3 pl-2">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold dark:text-white">Lead Architect</p>
-              <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">Growth Tier 5</p>
-            </div>
             <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
               <User size={20} />
             </div>
@@ -191,15 +235,46 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-8 pt-24 pb-12">
         {activeTab === 'roadmap' ? (
-          <RoadmapView 
-            nodes={nodes} 
-            onCreate={handleCreateInitialRoadmap} 
-            onDrillDown={handleDrillDown}
-            onToggleMastery={toggleNodeMastery}
-            onStartFocus={startFocus}
-            onClear={() => { setNodes([]); setTopic(''); }}
-            onFetchContent={handleFetchNodeContent}
-          />
+          <>
+            {nodes.length > 0 && (
+              <div className="max-w-2xl mx-auto mb-16 space-y-4">
+                <form className="relative group/form flex items-center gap-3">
+                  <input 
+                    type="text"
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                    placeholder="Capture a new thought..."
+                    className="flex-1 bg-white dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 rounded-2xl py-4 px-6 text-sm font-semibold focus:outline-none focus:border-indigo-500 transition-all"
+                  />
+                  <button 
+                    onClick={(e) => handleAddTask(e, 'signal')}
+                    title="Add as Signal"
+                    className="p-4 rounded-2xl signal-gradient text-white shadow-lg hover:scale-105 transition-all"
+                  >
+                    <Zap size={20} fill="currentColor" />
+                  </button>
+                  <button 
+                    onClick={(e) => handleAddTask(e, 'noise')}
+                    title="Add as Noise"
+                    className="p-4 rounded-2xl bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400 shadow-lg hover:scale-105 transition-all"
+                  >
+                    <Ban size={20} />
+                  </button>
+                </form>
+              </div>
+            )}
+            <RoadmapView 
+              nodes={hideNoise ? nodes.filter(n => n.type === 'signal') : nodes} 
+              onCreate={handleCreateInitialRoadmap} 
+              onDrillDown={handleDrillDown}
+              onToggleMastery={toggleNodeMastery}
+              onStartFocus={startFocus}
+              onClear={() => { setNodes([]); setTopic(''); }}
+              onFetchContent={handleFetchNodeContent}
+              onToggleType={toggleNodeType}
+              onDelete={handleDeleteNode}
+            />
+          </>
         ) : (
           <Analytics stats={stats} tasks={nodes} />
         )}

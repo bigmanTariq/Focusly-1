@@ -2,6 +2,15 @@
 export type NodeStatus = 'locked' | 'available' | 'in-progress' | 'mastered';
 export type NodeType = 'signal' | 'noise';
 
+export interface DeepContent {
+  executiveSummary: string;
+  technicalMechanics: string[];
+  minuteDetails: string[];
+  expertMentalModel: string;
+  commonPitfalls: string[];
+  eli7: string;
+}
+
 export interface LearningNode {
   id: string;
   parentId: string | null;
@@ -14,8 +23,7 @@ export interface LearningNode {
   learningOutcome: string; // Specific capability
   searchQueries: string[]; // High-precision search strings
   resources: string[]; // Curated resource types
-  content?: string; // High-fidelity deep content
-  eli7Content?: string; // Simplified "No Fluff" version
+  deepContent?: DeepContent; // High-fidelity structured content
   pomodorosSpent: number;
   childrenIds: string[];
   createdAt: number;

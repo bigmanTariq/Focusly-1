@@ -1,11 +1,8 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-
-/**
- * T-Shaped Curriculum Architect Service
- */
+// Initialize the GoogleGenAI client with the API key from environment variables.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateRoadmap = async (topic: string, depth: number = 0): Promise<any[]> => {
   if (!process.env.API_KEY) return [];
@@ -68,39 +65,45 @@ Output exactly 6 nodes for the initial spine (depth 0).`;
   }
 };
 
-export const generateNodeContent = async (nodeTitle: string, contextTopic: string): Promise<{ content: string, eli7Content: string }> => {
-  if (!process.env.API_KEY) return { content: "", eli7Content: "" };
+export const generateNodeContent = async (nodeTitle: string, contextTopic: string): Promise<any> => {
+  if (!process.env.API_KEY) return null;
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Generate interactive learning content for the concept "${nodeTitle}" within the broader context of "${contextTopic}".
+      contents: `Perform a deep pedagogical dissection of "${nodeTitle}" within the master domain of "${contextTopic}".
       
-      You must provide two versions:
-      1. PROFESSIONAL: A high-signal, Wharton-level, no-fluff deep dive (approx 200 words). Use bullet points for key mechanics.
-      2. ELI7: A "No Fluff" simplified version for a 7-year old using a brilliant analogy. No jargon.
+      Your objective is to provide expert-level mastery content.
       
-      Format your response as JSON.`,
+      STRUCTURE REQUIRED:
+      1. EXECUTIVE SUMMARY: High-signal theoretical grounding.
+      2. TECHNICAL MECHANICS: 4-6 detailed steps or components explaining 'How' it works.
+      3. MINUTE DETAILS: 3-5 'Miniscule' nuances, edge cases, or expert-level observations that distinguish a master from a practitioner.
+      4. EXPERT MENTAL MODEL: A single, powerful framing for how to think about this concept.
+      5. COMMON PITFALLS: 3 ways novices fail or misunderstand this.
+      6. ELI7: A "No Fluff" simplified analogy for a 7-year old.
+      
+      Format as JSON with keys: executiveSummary, technicalMechanics (array), minuteDetails (array), expertMentalModel, commonPitfalls (array), eli7.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            professional: { type: Type.STRING },
+            executiveSummary: { type: Type.STRING },
+            technicalMechanics: { type: Type.ARRAY, items: { type: Type.STRING } },
+            minuteDetails: { type: Type.ARRAY, items: { type: Type.STRING } },
+            expertMentalModel: { type: Type.STRING },
+            commonPitfalls: { type: Type.ARRAY, items: { type: Type.STRING } },
             eli7: { type: Type.STRING }
           },
-          required: ["professional", "eli7"]
+          required: ["executiveSummary", "technicalMechanics", "minuteDetails", "expertMentalModel", "commonPitfalls", "eli7"]
         }
       }
     });
 
-    const result = JSON.parse(response.text);
-    return {
-      content: result.professional,
-      eli7Content: result.eli7
-    };
+    return JSON.parse(response.text);
   } catch (error) {
     console.error("Content generation failed", error);
-    return { content: "Failed to generate content.", eli7Content: "Failed to generate content." };
+    return null;
   }
 };
