@@ -89,10 +89,10 @@ const App: React.FC = () => {
       id: crypto.randomUUID(),
       parentId: null,
       title: newTaskTitle,
-      description: "Manual task entry",
+      description: "Manual expert capture",
       type: type,
       difficultyLevel: type === 'signal' ? 50 : 0,
-      learningOutcome: "Completion of manual task",
+      learningOutcome: "Manual objective completion",
       searchQueries: [],
       resources: [],
       status: 'available',
@@ -107,9 +107,10 @@ const App: React.FC = () => {
 
   const handleFetchNodeContent = async (nodeId: string) => {
     const node = nodes.find(n => n.id === nodeId);
+    // Check if content already exists to save AI credits
     if (!node || node.deepContent) return;
 
-    const result: DeepContent = await generateNodeContent(node.title, topic || "Productivity");
+    const result: DeepContent = await generateNodeContent(node.title, topic || "Expert Mastery");
     if (result) {
       setNodes(prev => prev.map(n => n.id === nodeId ? { 
         ...n, 
@@ -159,7 +160,7 @@ const App: React.FC = () => {
       if (n.id === id) {
         const newStatus = n.status === 'mastered' ? 'available' : 'mastered';
         if (newStatus === 'mastered') {
-           (window as any).confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#6366f1', '#a855f7'] });
+           (window as any).confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 }, colors: ['#6366f1', '#a855f7', '#10b981'] });
            setStats(prevStats => ({
              ...prevStats,
              totalNodesMastered: prevStats.totalNodesMastered + 1,
@@ -191,75 +192,77 @@ const App: React.FC = () => {
       <header className="fixed top-0 left-0 md:left-24 right-0 h-16 bg-white/70 dark:bg-black/70 apple-blur z-40 px-8 flex items-center justify-between border-b border-gray-100 dark:border-white/10">
         <div className="flex items-center gap-3">
            <Network className="text-indigo-500" size={24} />
-           <span className="font-bold tracking-tight dark:text-white uppercase text-xs">Focusly <span className="text-indigo-500">Signal Architect</span></span>
+           <span className="font-black tracking-tight dark:text-white uppercase text-xs">Path Architect <span className="text-indigo-500">Expert v2</span></span>
         </div>
         
         {topic && (
-          <div className="hidden lg:flex items-center gap-4 bg-gray-100 dark:bg-white/5 px-4 py-1.5 rounded-full border border-gray-200 dark:border-white/10">
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Mission</span>
-            <span className="text-xs font-bold dark:text-white truncate max-w-[200px]">{topic}</span>
+          <div className="hidden lg:flex items-center gap-4 bg-gray-100 dark:bg-white/5 px-6 py-1.5 rounded-full border border-gray-200 dark:border-white/10">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Mission Vector</span>
+            <span className="text-xs font-black dark:text-white truncate max-w-[300px] uppercase tracking-wider text-indigo-500">{topic}</span>
           </div>
         )}
 
         <div className="flex items-center gap-4">
           <button 
             onClick={() => setHideNoise(!hideNoise)} 
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${hideNoise ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-gray-100 dark:bg-white/5 text-gray-500'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${hideNoise ? 'bg-indigo-500 text-white shadow-xl shadow-indigo-500/30' : 'bg-gray-100 dark:bg-white/5 text-gray-500 border border-gray-200 dark:border-white/10'}`}
           >
-            <Ban size={14} /> {hideNoise ? 'Noise Hidden' : 'Showing All'}
+            <Ban size={14} /> {hideNoise ? 'Signal Only' : 'Signal + Noise'}
           </button>
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 dark:text-gray-400 transition-colors">
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-2xl hover:bg-gray-100 dark:hover:bg-white/10 dark:text-gray-400 transition-colors">
             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          <div className="h-8 w-[1px] bg-gray-100 dark:bg-white/10 mx-1"></div>
-          <button className="flex items-center gap-3 pl-2">
-            <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-              <User size={20} />
-            </div>
-          </button>
+          <div className="h-10 w-10 rounded-2xl bg-indigo-500 flex items-center justify-center text-white shadow-xl shadow-indigo-500/20">
+            <User size={20} />
+          </div>
         </div>
       </header>
 
       <nav className="fixed bottom-0 left-0 w-full h-20 bg-white/80 dark:bg-black/80 border-t border-gray-100 dark:border-white/10 flex items-center justify-around px-4 md:flex-col md:w-24 md:h-full md:border-t-0 md:border-r z-50 apple-blur">
         <div className="hidden md:flex flex-col items-center gap-2 mb-12 mt-6">
-          <div className="w-14 h-14 rounded-2xl signal-gradient flex items-center justify-center text-white font-bold text-3xl shadow-xl shadow-indigo-500/20">F</div>
+          <div className="w-14 h-14 rounded-3xl signal-gradient flex items-center justify-center text-white font-black text-3xl shadow-2xl shadow-indigo-500/30">F</div>
         </div>
-        <button onClick={() => setActiveTab('roadmap')} className={`p-4 rounded-2xl transition-all ${activeTab === 'roadmap' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>
-          <Layout size={24} />
+        <button onClick={() => setActiveTab('roadmap')} className={`p-5 rounded-[1.5rem] transition-all ${activeTab === 'roadmap' ? 'bg-indigo-500 text-white shadow-2xl shadow-indigo-500/30' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>
+          <Layout size={26} />
         </button>
-        <button onClick={() => setActiveTab('stats')} className={`p-4 rounded-2xl transition-all ${activeTab === 'stats' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>
-          <BarChart2 size={24} />
+        <button onClick={() => setActiveTab('stats')} className={`p-5 rounded-[1.5rem] transition-all ${activeTab === 'stats' ? 'bg-indigo-500 text-white shadow-2xl shadow-indigo-500/30' : 'text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>
+          <BarChart2 size={26} />
         </button>
         <div className="flex-1"></div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-8 pt-24 pb-12">
+      <main className="max-w-7xl mx-auto px-8 pt-24 pb-12 animate-in fade-in duration-1000">
         {activeTab === 'roadmap' ? (
           <>
             {nodes.length > 0 && (
-              <div className="max-w-2xl mx-auto mb-16 space-y-4">
+              <div className="max-w-3xl mx-auto mb-16 space-y-4">
                 <form className="relative group/form flex items-center gap-3">
+                  <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none text-gray-400">
+                    <Plus size={20} />
+                  </div>
                   <input 
                     type="text"
                     value={newTaskTitle}
                     onChange={(e) => setNewTaskTitle(e.target.value)}
-                    placeholder="Capture a new thought..."
-                    className="flex-1 bg-white dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 rounded-2xl py-4 px-6 text-sm font-semibold focus:outline-none focus:border-indigo-500 transition-all"
+                    placeholder="Capture expert nuance or tasks..."
+                    className="flex-1 bg-white dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 rounded-[2rem] py-5 pl-14 pr-8 text-lg font-bold focus:outline-none focus:border-indigo-500 transition-all shadow-xl"
                   />
-                  <button 
-                    onClick={(e) => handleAddTask(e, 'signal')}
-                    title="Add as Signal"
-                    className="p-4 rounded-2xl signal-gradient text-white shadow-lg hover:scale-105 transition-all"
-                  >
-                    <Zap size={20} fill="currentColor" />
-                  </button>
-                  <button 
-                    onClick={(e) => handleAddTask(e, 'noise')}
-                    title="Add as Noise"
-                    className="p-4 rounded-2xl bg-gray-200 dark:bg-white/10 text-gray-600 dark:text-gray-400 shadow-lg hover:scale-105 transition-all"
-                  >
-                    <Ban size={20} />
-                  </button>
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={(e) => handleAddTask(e, 'signal')}
+                      title="Add as Signal"
+                      className="p-5 rounded-[1.5rem] bg-black dark:bg-white text-white dark:text-black shadow-2xl hover:scale-110 active:scale-95 transition-all"
+                    >
+                      <Zap size={22} fill="currentColor" />
+                    </button>
+                    <button 
+                      onClick={(e) => handleAddTask(e, 'noise')}
+                      title="Add as Noise"
+                      className="p-5 rounded-[1.5rem] bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400 shadow-xl hover:scale-110 active:scale-95 transition-all"
+                    >
+                      <Ban size={22} />
+                    </button>
+                  </div>
                 </form>
               </div>
             )}
