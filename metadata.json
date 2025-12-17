@@ -1,0 +1,5 @@
+{
+  "name": "Focusly",
+  "description": "A minimalist productivity dashboard focused on distinguishing high-impact 'Signal' tasks from low-value 'Noise' distractions, featuring a Pomodoro timer and dopamine-driven feedback.",
+  "requestFramePermissions": []
+}
