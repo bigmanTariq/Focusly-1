@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { LearningNode, TimerState, UserStats, NodeType, DeepContent } from './types';
 import { WORK_TIME } from './constants';
 import { generateRoadmap, generateNodeContent } from './geminiService';
 import RoadmapView from './components/RoadmapView';
 import Analytics from './components/Analytics';
 import FocusMode from './components/FocusMode';
-import { Layout, BarChart2, Moon, Sun, User, Network, Plus, Zap, Ban } from 'lucide-react';
+import Playground from './components/Playground';
+import { Layout, BarChart2, Moon, Sun, User, Network, Plus, Zap, Ban, Sliders } from 'lucide-react';
 
 const App: React.FC = () => {
   const [nodes, setNodes] = useState<LearningNode[]>(() => {
@@ -32,14 +33,21 @@ const App: React.FC = () => {
     };
   });
 
-  const [activeTab, setActiveTab] = useState<'roadmap' | 'stats'>('roadmap');
+  const [activeTab, setActiveTab] = useState<'roadmap' | 'stats' | 'playground'>('roadmap');
+  const [activePlaygroundData, setActivePlaygroundData] = useState<{
+    type: any,
+    initialData: string,
+    prompt: string,
+    nodeId: string
+  } | null>(null);
+
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('focusly_theme') === 'dark' || 
            (!localStorage.getItem('focusly_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
 
   const [topic, setTopic] = useState<string>(() => localStorage.getItem('focusly_topic') || '');
-  const [hideNoise, setHideNoise] = useState(false);
+  const [noiseTransparency, setNoiseTransparency] = useState(100);
   const [newTaskTitle, setNewTaskTitle] = useState('');
 
   useEffect(() => {
@@ -55,13 +63,45 @@ const App: React.FC = () => {
     localStorage.setItem('focusly_stats', JSON.stringify(stats));
   }, [stats]);
 
+  // Timer Tick Logic
   useEffect(() => {
-    localStorage.setItem('focusly_topic', topic);
-  }, [topic]);
+    let interval: number | undefined;
+    if (timer.status === 'working' && timer.timeLeft > 0) {
+      interval = window.setInterval(() => {
+        setTimer(prev => ({ ...prev, timeLeft: prev.timeLeft - 1 }));
+      }, 1000);
+    } else if (timer.status === 'working' && timer.timeLeft === 0) {
+      handleTimerComplete();
+    }
+    return () => clearInterval(interval);
+  }, [timer.status, timer.timeLeft]);
+
+  const handleTimerComplete = useCallback(() => {
+    setTimer(prev => ({
+      ...prev,
+      status: 'completed',
+      totalSessions: prev.totalSessions + 1
+    }));
+
+    if (timer.activeNodeId) {
+      setNodes(prev => prev.map(n => 
+        n.id === timer.activeNodeId 
+          ? { ...n, pomodorosSpent: n.pomodorosSpent + 1 } 
+          : n
+      ));
+
+      setStats(prev => ({
+        ...prev,
+        totalFocusHours: prev.totalFocusHours + (WORK_TIME / 3600),
+      }));
+    }
+  }, [timer.activeNodeId]);
 
   const handleCreateInitialRoadmap = async (inputTopic: string) => {
-    setTopic(inputTopic);
     const suggested = await generateRoadmap(inputTopic, 0);
+    if (!suggested || suggested.length === 0) return;
+
+    setTopic(inputTopic);
     const newNodes: LearningNode[] = suggested.map((n: any, i: number) => ({
       id: crypto.randomUUID(),
       parentId: null,
@@ -81,36 +121,11 @@ const App: React.FC = () => {
     setNodes(newNodes);
   };
 
-  const handleAddTask = (e: React.FormEvent, type: NodeType) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim()) return;
-    
-    const newNode: LearningNode = {
-      id: crypto.randomUUID(),
-      parentId: null,
-      title: newTaskTitle,
-      description: "Manual expert capture",
-      type: type,
-      difficultyLevel: type === 'signal' ? 50 : 0,
-      learningOutcome: "Manual objective completion",
-      searchQueries: [],
-      resources: [],
-      status: 'available',
-      depth: 0,
-      pomodorosSpent: 0,
-      childrenIds: [],
-      createdAt: Date.now(),
-    };
-    setNodes(prev => [newNode, ...prev]);
-    setNewTaskTitle('');
-  };
-
-  const handleFetchNodeContent = async (nodeId: string) => {
+  const handleFetchNodeContent = async (nodeId: string, complexity: number) => {
     const node = nodes.find(n => n.id === nodeId);
-    // Check if content already exists to save AI credits
-    if (!node || node.deepContent) return;
+    if (!node) return;
 
-    const result: DeepContent = await generateNodeContent(node.title, topic || "Expert Mastery");
+    const result: DeepContent = await generateNodeContent(node.title, topic || "Expert Mastery", complexity);
     if (result) {
       setNodes(prev => prev.map(n => n.id === nodeId ? { 
         ...n, 
@@ -119,70 +134,41 @@ const App: React.FC = () => {
     }
   };
 
-  const toggleNodeType = (id: string) => {
-    setNodes(prev => prev.map(n => n.id === id ? { ...n, type: n.type === 'signal' ? 'noise' : 'signal' } : n));
-  };
-
-  const handleDeleteNode = (id: string) => {
-    setNodes(prev => prev.filter(n => n.id !== id));
-  };
-
-  const handleDrillDown = async (parentId: string) => {
-    const parentNode = nodes.find(n => n.id === parentId);
-    if (!parentNode) return;
-
-    const suggested = await generateRoadmap(parentNode.title, parentNode.depth + 1);
-    const newSubNodes: LearningNode[] = suggested.map((n: any) => ({
-      id: crypto.randomUUID(),
-      parentId: parentId,
-      title: n.title,
-      description: n.description,
-      type: n.type as NodeType,
-      difficultyLevel: n.difficulty_level,
-      learningOutcome: n.learning_outcome,
-      searchQueries: n.search_queries || [],
-      resources: n.resources || [],
-      status: 'available',
-      depth: parentNode.depth + 1,
-      pomodorosSpent: 0,
-      childrenIds: [],
-      createdAt: Date.now(),
-    }));
-
-    setNodes(prev => {
-      const updatedParent = { ...parentNode, childrenIds: [...parentNode.childrenIds, ...newSubNodes.map(sn => sn.id)] };
-      return [...prev.filter(n => n.id !== parentId), updatedParent, ...newSubNodes];
-    });
-  };
-
-  const toggleNodeMastery = (id: string) => {
-    setNodes(prev => prev.map(n => {
-      if (n.id === id) {
-        const newStatus = n.status === 'mastered' ? 'available' : 'mastered';
-        if (newStatus === 'mastered') {
-           (window as any).confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 }, colors: ['#6366f1', '#a855f7', '#10b981'] });
-           setStats(prevStats => ({
-             ...prevStats,
-             totalNodesMastered: prevStats.totalNodesMastered + 1,
-           }));
-        }
-        return { ...n, status: newStatus };
-      }
-      return n;
-    }));
-  };
-
   const startFocus = (id: string) => {
     setTimer(prev => ({ ...prev, activeNodeId: id, status: 'working', timeLeft: WORK_TIME }));
   };
 
-  if (timer.status === 'working' && timer.activeNodeId) {
+  const launchPlayground = (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node && node.deepContent) {
+      setActivePlaygroundData({
+        type: node.deepContent.playground.type,
+        initialData: node.deepContent.playground.initialData,
+        prompt: node.deepContent.playground.prompt,
+        nodeId: nodeId
+      });
+      setActiveTab('playground');
+    }
+  };
+
+  if ((timer.status === 'working' || timer.status === 'completed') && timer.activeNodeId) {
     return (
       <FocusMode 
         timer={timer} 
         task={nodes.find(n => n.id === timer.activeNodeId) || null} 
-        onExit={() => setTimer(p => ({ ...p, status: 'idle' }))}
+        onExit={() => setTimer(p => ({ ...p, status: 'idle', timeLeft: WORK_TIME, activeNodeId: null }))}
         onToggleTimer={() => setTimer(p => ({ ...p, status: p.status === 'working' ? 'idle' : 'working' }))}
+      />
+    );
+  }
+
+  if (activeTab === 'playground' && activePlaygroundData) {
+    return (
+      <Playground 
+        type={activePlaygroundData.type}
+        initialData={activePlaygroundData.initialData}
+        prompt={activePlaygroundData.prompt}
+        onClose={() => setActiveTab('roadmap')}
       />
     );
   }
@@ -195,20 +181,21 @@ const App: React.FC = () => {
            <span className="font-black tracking-tight dark:text-white uppercase text-xs">Path Architect <span className="text-indigo-500">Expert v2</span></span>
         </div>
         
-        {topic && (
-          <div className="hidden lg:flex items-center gap-4 bg-gray-100 dark:bg-white/5 px-6 py-1.5 rounded-full border border-gray-200 dark:border-white/10">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Mission Vector</span>
-            <span className="text-xs font-black dark:text-white truncate max-w-[300px] uppercase tracking-wider text-indigo-500">{topic}</span>
+        <div className="flex items-center gap-6">
+          <div className="hidden lg:flex items-center gap-3 bg-gray-100 dark:bg-white/5 px-6 py-2 rounded-full border border-gray-200 dark:border-white/10">
+             <Sliders size={14} className="text-gray-400" />
+             <span className="text-[10px] font-black uppercase text-gray-400 whitespace-nowrap">Noise Suppression</span>
+             <input 
+               type="range" 
+               min="0" 
+               max="100" 
+               value={noiseTransparency} 
+               onChange={(e) => setNoiseTransparency(parseInt(e.target.value))} 
+               className="w-24 h-1.5"
+             />
+             <span className="text-[10px] font-black text-indigo-500 w-8">{100 - noiseTransparency}%</span>
           </div>
-        )}
 
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => setHideNoise(!hideNoise)} 
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${hideNoise ? 'bg-indigo-500 text-white shadow-xl shadow-indigo-500/30' : 'bg-gray-100 dark:bg-white/5 text-gray-500 border border-gray-200 dark:border-white/10'}`}
-          >
-            <Ban size={14} /> {hideNoise ? 'Signal Only' : 'Signal + Noise'}
-          </button>
           <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3 rounded-2xl hover:bg-gray-100 dark:hover:bg-white/10 dark:text-gray-400 transition-colors">
             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
@@ -231,53 +218,21 @@ const App: React.FC = () => {
         <div className="flex-1"></div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-8 pt-24 pb-12 animate-in fade-in duration-1000">
+      <main className="max-w-7xl mx-auto px-8 pt-24 pb-12">
         {activeTab === 'roadmap' ? (
-          <>
-            {nodes.length > 0 && (
-              <div className="max-w-3xl mx-auto mb-16 space-y-4">
-                <form className="relative group/form flex items-center gap-3">
-                  <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none text-gray-400">
-                    <Plus size={20} />
-                  </div>
-                  <input 
-                    type="text"
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    placeholder="Capture expert nuance or tasks..."
-                    className="flex-1 bg-white dark:bg-white/5 border-2 border-gray-100 dark:border-white/10 rounded-[2rem] py-5 pl-14 pr-8 text-lg font-bold focus:outline-none focus:border-indigo-500 transition-all shadow-xl"
-                  />
-                  <div className="flex gap-3">
-                    <button 
-                      onClick={(e) => handleAddTask(e, 'signal')}
-                      title="Add as Signal"
-                      className="p-5 rounded-[1.5rem] bg-black dark:bg-white text-white dark:text-black shadow-2xl hover:scale-110 active:scale-95 transition-all"
-                    >
-                      <Zap size={22} fill="currentColor" />
-                    </button>
-                    <button 
-                      onClick={(e) => handleAddTask(e, 'noise')}
-                      title="Add as Noise"
-                      className="p-5 rounded-[1.5rem] bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400 shadow-xl hover:scale-110 active:scale-95 transition-all"
-                    >
-                      <Ban size={22} />
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-            <RoadmapView 
-              nodes={hideNoise ? nodes.filter(n => n.type === 'signal') : nodes} 
-              onCreate={handleCreateInitialRoadmap} 
-              onDrillDown={handleDrillDown}
-              onToggleMastery={toggleNodeMastery}
-              onStartFocus={startFocus}
-              onClear={() => { setNodes([]); setTopic(''); }}
-              onFetchContent={handleFetchNodeContent}
-              onToggleType={toggleNodeType}
-              onDelete={handleDeleteNode}
-            />
-          </>
+          <RoadmapView 
+            nodes={nodes} 
+            noiseTransparency={noiseTransparency}
+            onCreate={handleCreateInitialRoadmap} 
+            onDrillDown={() => {}} 
+            onToggleMastery={() => {}}
+            onStartFocus={startFocus}
+            onClear={() => { setNodes([]); setTopic(''); }}
+            onFetchContent={handleFetchNodeContent}
+            onToggleType={() => {}}
+            onDelete={() => {}}
+            onLaunchPlayground={launchPlayground}
+          />
         ) : (
           <Analytics stats={stats} tasks={nodes} />
         )}
